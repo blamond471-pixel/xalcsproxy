@@ -1,4 +1,4 @@
-// api/proxy.js - Crash-proof versiyon
+// api/proxy.js - Düzeltilmiş Vercel Serverless Proxy (wildcard fix)
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
@@ -11,59 +11,71 @@ const app = express();
 
 app.use(morgan('dev'));
 app.use(compression());
-app.use(helmet({ contentSecurityPolicy: false, frameguard: false }));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  frameguard: false,
+  referrerPolicy: { policy: 'no-referrer' }
+}));
 app.use(cors({ origin: '*' }));
 
-// Statik dosyalar (index.html)
-app.use(express.static(path.join(__dirname, '..')));  // kök klasördeki index.html
+// Statik dosyalar (index.html kök klasörde)
+app.use(express.static(path.join(__dirname, '..')));
 
-app.use('/proxy/:encodedUrl*', (req, res, next) => {
+// Ana sayfa
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'index.html'));
+});
+
+// Proxy rotası - WILDCARD FIX: :encodedUrl(.*)
+app.use('/proxy/:encodedUrl(.*)', async (req, res) => {
   try {
-    const encodedUrl = req.params.encodedUrl;
-    if (!encodedUrl) {
-      return res.status(400).send('Encoded URL eksik');
+    const encoded = req.params.encodedUrl;
+    if (!encoded) {
+      return res.status(400).send('URL eksik. Lütfen bir adres girin.');
     }
 
-    let target;
+    let targetUrl;
     try {
-      target = Buffer.from(encodedUrl, 'base64').toString('utf-8');
-    } catch (decodeErr) {
-      console.error('Base64 decode hatası:', decodeErr);
-      return res.status(400).send('Geçersiz base64 URL');
+      targetUrl = Buffer.from(encoded, 'base64').toString('utf-8');
+    } catch (e) {
+      console.error('Base64 decode hatası:', e);
+      return res.status(400).send('Geçersiz URL (base64 decode edilemedi).');
     }
 
-    if (!target.startsWith('http')) {
-      target = 'https://' + target;
+    if (!targetUrl.startsWith('http')) {
+      targetUrl = 'https://' + targetUrl;
     }
 
-    console.log(`[PROXY] Hedef: ${target} | Path: ${req.originalUrl}`);
+    console.log(`[PROXY] İstek: ${req.method} ${req.originalUrl} → Hedef: ${targetUrl}`);
 
     const proxy = createProxyMiddleware({
-      target,
+      target: targetUrl,
       changeOrigin: true,
       pathRewrite: (p) => p.replace(/^\/proxy\/[^/]+/, ''),
       selfHandleResponse: true,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       on: {
         proxyRes: (proxyRes, req, res) => {
-          // Güvenlik header'larını kaldır
-          delete proxyRes.headers['content-security-policy'];
-          delete proxyRes.headers['x-frame-options'];
-          delete proxyRes.headers['strict-transport-security'];
+          // Güvenlik header'larını temizle
+          ['content-security-policy', 'x-frame-options', 'strict-transport-security', 'x-content-type-options'].forEach(h => {
+            delete proxyRes.headers[h];
+          });
+
+          res.set(proxyRes.headers);
 
           if (proxyRes.headers['content-type']?.includes('text/html')) {
             let body = [];
             proxyRes.on('data', chunk => body.push(chunk));
             proxyRes.on('end', () => {
-              let html = Buffer.concat(body).toString();
+              let html = Buffer.concat(body).toString('utf8');
 
-              // Relative link rewrite
-              const base = `/proxy/${encodedUrl}/`;
-              html = html.replace(/<head>/i, `<head><base href="${base}">`);
+              // Base tag + relative link fix
+              const proxyBase = `/proxy/${encoded}/`;
+              html = html.replace(/<head[^>]*>/i, `<head><base href="${proxyBase}">`);
 
-              res.set(proxyRes.headers);
               res.send(html);
             });
           } else {
@@ -71,27 +83,22 @@ app.use('/proxy/:encodedUrl*', (req, res, next) => {
           }
         },
         error: (err, req, res) => {
-          console.error('[PROXY ERROR]', err);
-          res.status(502).send('Proxy bağlantı hatası: ' + err.message);
+          console.error('[Proxy Error]', err.message);
+          res.status(502).send(`Proxy hatası: ${err.message}`);
         }
       }
     });
 
-    proxy(req, res, next);
+    proxy(req, res);
   } catch (err) {
-    console.error('[CRITICAL ERROR]', err);
-    res.status(500).send('Sunucu hatası: ' + err.message);
+    console.error('[Critical Error]', err.stack);
+    res.status(500).send(`Sunucu hatası: ${err.message}`);
   }
 });
 
-// Ana sayfa
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'index.html'));
-});
-
-// 404
+// 404 catch-all
 app.use((req, res) => {
-  res.status(404).send('Sayfa bulunamadı');
+  res.status(404).send('404 - Bulunamadı. Ana sayfaya dön: <a href="/">Ana Sayfa</a>');
 });
 
 module.exports = app;

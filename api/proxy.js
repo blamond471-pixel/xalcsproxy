@@ -19,48 +19,40 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
-// ★★★ DOĞRU WILDCARD TANIMI ★★★
+// ★★★ BU SATIR ÇOK ÖNEMLİ – WILDCARD DÜZELTİLDİ ★★★
 app.use('/proxy/:encodedUrl(.*)', (req, res, next) => {
   try {
     const encoded = req.params.encodedUrl;
-    if (!encoded) {
-      return res.status(400).send('URL eksik. Bir adres girin.');
-    }
+    if (!encoded) return res.status(400).send('URL eksik');
 
     let targetUrl;
     try {
       targetUrl = Buffer.from(encoded, 'base64').toString('utf-8');
-    } catch (decodeErr) {
-      console.error('Base64 decode hatası:', decodeErr);
-      return res.status(400).send('Geçersiz URL formatı.');
+    } catch (e) {
+      return res.status(400).send('Geçersiz base64');
     }
 
-    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    if (!targetUrl.match(/^https?:\/\//)) {
       targetUrl = 'https://' + targetUrl;
     }
 
-    console.log(`[PROXY] ${req.method} ${req.originalUrl} → ${targetUrl}`);
+    console.log(`Proxy → ${targetUrl}`);
 
     createProxyMiddleware({
       target: targetUrl,
       changeOrigin: true,
       pathRewrite: (p) => p.replace(/^\/proxy\/[^/]+/, ''),
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
       onError: (err, req, res) => {
-        console.error('Proxy hatası:', err.message);
-        res.status(502).send('Proxy bağlantı hatası: ' + err.message);
+        console.error('Proxy error:', err.message);
+        res.status(502).send('Proxy hatası');
       }
     })(req, res, next);
   } catch (err) {
-    console.error('Genel hata:', err.message);
     res.status(500).send('Sunucu hatası: ' + err.message);
   }
 });
 
-app.use((req, res) => {
-  res.status(404).send('404 - Sayfa bulunamadı');
-});
+app.use((req, res) => res.status(404).send('404'));
 
-module.exports = app;
+module.exports = app;git add api/proxy.js

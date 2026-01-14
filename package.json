@@ -1,0 +1,30 @@
+{
+  "name": "xalcsproxy",
+  "version": "1.0.0",
+  "description": "Fatih/MEB filtre bypass için basit client-side web proxy.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blamond471-pixel/xalcsproxy.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/blamond471-pixel/xalcsproxy/issues"
+  },
+  "homepage": "https://github.com/blamond471-pixel/xalcsproxy#readme",
+  "dependencies": {
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "http-proxy-middleware": "^3.0.5",
+    "morgan": "^1.10.1",
+    "path": "^0.12.7"
+  }
+}

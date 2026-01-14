@@ -1,13 +1,23 @@
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "index.html",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    { "src": "/", "dest": "/index.html" },
-    { "handle": "filesystem" }
-  ]
-}
+{  
+  "version": 2,  
+  "builds": [  
+    {  
+      "src": "api/proxy.js",  
+      "use": "@vercel/node"  
+    }  
+  ],  
+  "routes": [  
+    {  
+      "src": "/api/(.*)",  
+      "dest": "/api/proxy.js"  
+    },  
+    {  
+      "src": "/proxy/(.*)",  
+      "dest": "/api/proxy.js"  
+    },  
+    {  
+      "src": "/(.*)",  
+      "dest": "/index.html"  
+    }  
+  ]  
+}  
